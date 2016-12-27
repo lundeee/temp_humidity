@@ -11,11 +11,18 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 sensor                       = Adafruit_DHT.AM2302 #DHT11/DHT22/AM2302
 pin                          = 2
-sensor_name                  = "predilnica"
-hist_temperature_file_path   = "sensor-values/temperature_" + sensor_name + "_log_" + str(date.today().year) + ".csv"
-latest_temperature_file_path = "sensor-values/temperature_" + sensor_name + "_latest_value.csv"
-hist_humidity_file_path      = "sensor-values/humidity_" + sensor_name + "_log_" + str(date.today().year) + ".csv"
-latest_humidity_file_path    = "sensor-values/humidity_" + sensor_name + "_latest_value.csv"
+sensor_name                  = "studio_grad"
+values_path                  = "/var/www/html/"
+# hist_temperature_file_path   = values_path+"sensor-values/temperature_" + sensor_name + "_log_" + str(date.today().year) + ".csv"
+# latest_temperature_file_path = values_path+"sensor-values/temperature_" + sensor_name + "_latest_value.csv"
+# hist_humidity_file_path      = values_path+"sensor-values/humidity_" + sensor_name + "_log_" + str(date.today().year) + ".csv"
+# latest_humidity_file_path    = values_path+"sensor-values/humidity_" + sensor_name + "_latest_value.csv"
+
+hist_temperature_file_path   = values_path+"sensor-values/temperature_log.csv" 
+latest_temperature_file_path = values_path+"sensor-values/temperature_latest.txt"
+hist_humidity_file_path      = values_path+"sensor-values/humidity_log.csv"
+latest_humidity_file_path    = values_path+"sensor-values/humidity_latest.txt"
+
 csv_header_temperature       = "timestamp,temperature_in_celsius\n"
 csv_header_humidity          = "timestamp,relative_humidity\n"
 csv_entry_format             = "{:%Y-%m-%d %H:%M:%S},{:0.1f}\n"
@@ -29,25 +36,23 @@ def write_header(file_handle, csv_header):
 
 def write_value(file_handle, datetime, value):
   line = csv_entry_format.format(datetime, value)
-  print(file_handle)
+  #print(file_handle)
   file_handle.write(line)
   file_handle.flush()
 
 def open_file_ensure_header(file_path, mode, csv_header):
   f = open(file_path, mode, os.O_NONBLOCK)
-  if os.path.getsize(file_path) <= 0:
+  if os.path.getsize(file_path) <= 0 and csv_header != "":
     write_header(f, csv_header)
   return f
 
-def write_hist_value_callback(): 
+def write_hist_value(): 
   write_value(f_hist_temp, latest_value_datetime, latest_temperature)
   write_value(f_hist_hum, latest_value_datetime, latest_humidity)
 
 def write_latest_value():
-    with open_file_ensure_header(latest_temperature_file_path, 'w', csv_header_temperature) as f_latest_value:  #open and truncate
-        write_value(f_latest_value, latest_value_datetime, latest_temperature)
-    with open_file_ensure_header(latest_humidity_file_path, 'w', csv_header_humidity) as f_latest_value:  #open and truncate
-        write_value(f_latest_value, latest_value_datetime, latest_humidity)
+    with open_file_ensure_header(latest_temperature_file_path, 'w',"") as f_latest_value:  #open and truncate
+        f_latest_value.write( "temperature:" +'%.1f' % latest_temperature + "/nHumidity: %.1f" % latest_humidity)
 
 f_hist_temp = open_file_ensure_header(hist_temperature_file_path, 'a', csv_header_temperature)
 f_hist_hum  = open_file_ensure_header(hist_humidity_file_path, 'a', csv_header_humidity)
@@ -68,7 +73,7 @@ for x in range(2):
 print "Creating interval timer. This step takes almost 2 minutes on the Raspberry Pi..."
 #create timer that is called every n seconds, without accumulating delays as when using sleep
 scheduler = BackgroundScheduler()
-scheduler.add_job(write_hist_value_callback, 'interval', seconds=sec_between_log_entries)
+scheduler.add_job(write_hist_value, 'interval', seconds=sec_between_log_entries)
 scheduler.start()
 print "Started interval timer which will be called the first time in {0} seconds.".format(sec_between_log_entries);
 
@@ -79,7 +84,7 @@ try:
       latest_humidity, latest_temperature = hum, temp
       latest_value_datetime = datetime.today()
       write_latest_value()
-      write_hist_value_callback()
+      write_hist_value()
       print(str(latest_humidity)+"% "+str(latest_temperature)+"C")
     time.sleep(1)
 except (KeyboardInterrupt, SystemExit):
